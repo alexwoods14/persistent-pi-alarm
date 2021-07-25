@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# tflite model
+.tflite
+
+# Temporary image directory
+.tmp_images
