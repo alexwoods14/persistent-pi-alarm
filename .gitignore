@@ -133,4 +133,6 @@ dmypy.json
 *.jpg
 
 # Temporary image directory
-alarm/.tmp_images
+.tmp_images/
+
+run

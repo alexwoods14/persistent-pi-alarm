@@ -14,6 +14,7 @@ class Alarm:
         self.classifier = Classifier()
         self.in_bed_status = []
         self.watchdog_setup()
+        self.classifier_threads = []
 
         # start timelapse, ignore first 2 images due to exposure setting
         tl_proc = self.timelapse_setup()
@@ -21,7 +22,7 @@ class Alarm:
         # start morning song for 30 sec, increasing volume
         try:
             audio = SoundHandler()
-            # audio.play_song()
+            audio.play_song()
             threading.Thread(target=audio.vol_increasing).start()
         except:
             if audio is not None:
@@ -33,13 +34,16 @@ class Alarm:
         # After 30 mins - clean up
         try:
             for i in range(30*60): # for 30 mins
-                time.sleep(1)
-                if len(self.in_bed_status) >= 3 and np.sum(self.in_bed_status[-3:]) == 0:
+                time.sleep(0.5)
+                if len(self.in_bed_status) > 3 and np.sum(self.in_bed_status[-2:]) == 0:
                     audio.cleanup()
                     break
         except:
             self.my_observer.stop()
             self.my_observer.join()
+
+        for thread in self.classifier_threads:
+            thread.join()
         
         self.my_observer.stop()
         self.my_observer.join()
@@ -63,11 +67,12 @@ class Alarm:
 
     def on_created(self, event):
         x = threading.Thread(target=self.classify_image, args=(event.dest_path,))
+        self.classifier_threads.append(x)
         x.start()
 
     def classify_image(self, image_url):
         prob = self.classifier.classify(image_url)
-        in_bed = prob[1] <= 0.95
+        in_bed = prob[1] <= 0.9
         self.in_bed_status.append(in_bed)
         subprocess.Popen(['rm', image_url])
         print(f"{in_bed} : {prob}")
