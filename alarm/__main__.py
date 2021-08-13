@@ -9,7 +9,7 @@ def main():
     display = Display()
     threading.Thread(target=display.show_time).start()
     print("display running")
-    schedule.every().day.at("09:00").do(job)
+    schedule.every().day.at("10:00").do(job)
     print("alarm schedule set")
     while 1:
         schedule.run_pending()

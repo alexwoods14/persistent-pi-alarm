@@ -134,5 +134,6 @@ dmypy.json
 
 # Temporary image directory
 .tmp_images/
+*.mp3
 
 run
