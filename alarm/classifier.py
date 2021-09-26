@@ -1,3 +1,4 @@
+from picamera import PiCamera
 import tflite_runtime.interpreter as tflite
 from PIL import Image
 import numpy as np
@@ -13,10 +14,9 @@ class Classifier:
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
 
-    def classify(self, image_url):
-        image = Image.open(image_url)
-        input_data = image.resize((200, 150))
-        input_data = np.array(input_data).astype(np.float32)
+
+    def classify(self, image):
+        input_data = image.astype(np.float32)
         
         input_data = (np.expand_dims(input_data,0))
 
@@ -29,6 +29,14 @@ class Classifier:
 
 
 if __name__ == "__main__":
+    camera = PiCamera()
+    camera.resolution = (128,96)
+    time.sleep(2)
+    
     classifier = Classifier()
-    print(classifier.classify("photo.jpg"))
+    
+    image = np.empty((96, 128, 3), dtype=np.uint8)
+    camera.capture(image, 'rgb')
+
+    print(classifier.classify(image))
 

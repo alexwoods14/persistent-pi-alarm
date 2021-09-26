@@ -1,170 +1,103 @@
 import time
+from picamera import PiCamera
 import threading
-from watchdog.observers import Observer
-from watchdog.events import PatternMatchingEventHandler
 from classifier import Classifier
 import subprocess
 import numpy as np
 from gtts import gTTS
 from datetime import datetime, timedelta
+from sound_handler import SoundHandler
 
 class Alarm:
     def __init__(self):
+
+        self.counter = 0;
         # set song to use
         # gTTS summary of day
         # initialize classifier and watchdog stuff
         self.classifier = Classifier()
         self.in_bed_status = []
-        self.watchdog_setup()
-        self.classifier_threads = []
-
-        # start timelapse, ignore first 2 images due to exposure setting
-        tl_proc = self.timelapse_setup()
-
-        # start morning song for 30 sec, increasing volume
-        # give time for camera to set up
-        while len(self.in_bed_status) < 50:
-            time.sleep(1)
-        start_time = datetime.now()
-        end_time = start_time + timedelta(minutes=30)
         
-        # play alarm song until out of bed
-        try:
-            audio = SoundHandler()
-            #audio.play_song()
-            #threading.Thread(target=audio.vol_increasing).start()
-        except:
-            if audio is not None:
-                audio.cleanup()
-        
-        while len(self.in_bed_status) > 4 and np.sum(self.in_bed_status[-2:]) != 0:
-            time.sleep(1)
-
-        audio.cleanup()
-        time.sleep(2)
-        audio.set_tts()
-        #audio.play_tts()
-        while audio.audio_proc.poll() is None:
-            time.sleep(1)
-        audio.cleanup()
-        try:
-            for i in range(30*60): # for 30 mins
-                time.sleep(0.8)
-        except:
-            self.my_observer.stop()
-            self.my_observer.join()
-
-        for thread in self.classifier_threads:
-            thread.join()
-        
-        self.my_observer.stop()
-        self.my_observer.join()
-        tl_proc.terminate()
-        # sleep to allow image classifier threads to end
+        # set up camera, allow time for sensor to adjust to light level
+        self.camera = PiCamera()
+        self.camera.resolution = (128,96)
         time.sleep(2)
 
-    def watchdog_setup(self):
-        patterns = [".tmp_images/*"]
-        ignore_patterns = None
-        ignore_directories = None
-        case_sensitive = True
-        self.my_event_handler = PatternMatchingEventHandler(patterns, ignore_patterns,
-                                            ignore_directories, case_sensitive)
-        self.my_event_handler.on_moved = self.on_created
+        # set up audio
+        self.audio = SoundHandler()
+
+    def start_alarm(self):
+        # get the time and define when alarm should stop being on 'standby'
+        alarm_start = datetime.now()
+        alarm_end = alarm_start + timedelta(minutes=30)
         
-        self.my_observer = Observer()
-        self.my_observer.schedule(self.my_event_handler, '.', recursive=True)
-        self.my_observer.start()
+        # play alarm song until out of bed or go to beeping
+        self.play_music()
 
-
-    def on_created(self, event):
-        x = threading.Thread(target=self.classify_image, args=(event.dest_path,))
-        self.classifier_threads.append(x)
-        x.start()
-
-    def classify_image(self, image_url):
-        prob = self.classifier.classify(image_url)
-        in_bed = prob[1] <= 0.8
-        self.in_bed_status.append(in_bed)
-        subprocess.Popen(['rm', image_url])
-        print(f"{in_bed} : {prob}")
-
-    def timelapse_setup(self):
-        tl_cmd = ['raspistill', '-t', str(30*60*1000), '-tl', '1000', '-ex',
-                  'night', '-w', '200', '-h', '150', '-o',
-                  '.tmp_images/photo%03d.jpg']
-        return(subprocess.Popen(tl_cmd, stderr=subprocess.DEVNULL))
-
-
-class SoundHandler:
-    def __init__(self):
-        self.min_vol = -30
-        self.max_vol = 4
-        subprocess.Popen(['amixer', '-c', '0', 'sset', 'Headphone', '--', '%ddB' % self.min_vol], stdout=subprocess.DEVNULL)
-
-        # decide song to play today
-        self.song = "/home/pi/Music/starwars.mp3"
-        self.audio_proc = None
-        self.tts = None
-
-    
-    def play_song(self):
-        # vol = min
-        subprocess.Popen(['amixer', '-c', '0', 'sset', 'Headphone', '--', '%ddB' % self.min_vol], stdout=subprocess.DEVNULL)
-        if self.song is not None:
-            self.audio_proc = subprocess.Popen(['mpg123', self.song], stdout=subprocess.DEVNULL) 
-
-    def play_tts(self):
-        # vol = 50%
-        subprocess.Popen(['amixer', '-c', '0', 'sset', 'Headphone', '--', '%ddB' %
-               (self.min_vol + (self.max_vol-self.min_vol)*0.75)
-              ], stdout=subprocess.DEVNULL)
-        if self.tts is not None:
-            self.audio_proc = subprocess.Popen(['mpg123', self.tts], stdout=subprocess.DEVNULL)
-
-    def set_tts(self):
-        time_tts = datetime.now().strftime("%I:%M %p")
-        date_tts = datetime.now().strftime("%A the %d(st/nd/rd/th) of %B")
-        toSay = "Good morning. The time is " + time_tts
-        speech = gTTS(text=toSay, lang='en')
-        speech.save("tts.mp3")
-        self.tts = "tts.mp3"
-
-    def vol_set(self, vol):
-        subprocess.Popen(['amixer', '-c', '0', 'sset', 'Headphone', '--', '%ddB' % vol], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    def vol_increasing(self, start=0, end=100):
-        start_vol = self.min_vol + (self.max_vol-self.min_vol)*start/100
-        end_vol = self.min_vol + (self.max_vol-self.min_vol)*end/100
-        step_vol = 0.5
-        sleep_step = 30/((end_vol - start_vol)/step_vol) 
-        
-        for i in np.arange(start_vol, end_vol+1, step_vol):
-            if self.audio_proc is not None and self.audio_proc.poll() is not None:
+        # for 30 mins
+        while datetime.now() < alarm_end:
+            # if not in bed, stop audio, exit loop
+            if not self.check_in_bed():
+                self.audio.cleanup()
                 break
-            self.vol_set(i)
-            time.sleep(sleep_step)
+            else:
+                if not self.audio.playing_sound():
+                    self.audio.play_beep()
+
+        self.audio.set_tts()
+        time.sleep(1)
+        self.audio.play_tts()
+        while self.audio.playing_sound():
+            time.sleep(1)
+        
+        while datetime.now() < alarm_end:
+            if not self.check_in_bed():
+                self.audio.cleanup()
+            else:
+                if not self.audio.playing_sound():
+                    self.audio.play_beep()
+            
+        self.cleanup()
 
     def cleanup(self):
-        if self.audio_proc is not None and self.audio_proc.poll() is None:
-            self.audio_proc.terminate()
+        self.audio.cleanup()
+
+    def check_in_bed(self):
+        image = np.empty((96, 128, 3), dtype=np.uint8)
+        self.camera.capture(image, 'rgb')
+
+        result = self.classifier.classify(image)
+
+        # return 1 if (likely) in bed, 0 otherwise
+        #return result[0] >= 0.5
+        if self.counter < 20:
+            self.counter += 1
+            print("Returning 1")
+            return 1
+        else:
+            print("Returning 0")
+            return 0
 
 
+    def play_music(self):
+        # start music, start thread to increase volume as time goes on
+        try:
+            self.audio.play_song()
+            threading.Thread(target=self.audio.vol_increasing).start()
+        except Exception as e:
+            print(e)
+            if self.audio is not None:
+                self.audio.cleanup()
 
-def test_audio():
-#    try:
-    audio = SoundHandler()
-    audio.set_tts()
-    audio.play_tts()
-    while audio.audio_proc.poll() is None:
-        time.sleep(1)
-    audio.cleanup()
-#    except:
-#        print("ERROR, EXITING NOW")
-#        if audio is not None:
-#            audio.cleanup()
 
 if __name__ == "__main__":
     alarm = Alarm()
-    # test_audio()
+
+    try:
+        alarm.start_alarm()
+    except Exception as e:
+        print(e)
+        if alarm.audio is not None:
+            alarm.audio.cleanup()
+
 
