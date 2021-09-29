@@ -20,7 +20,7 @@ class SoundHandler:
         # vol = min
         subprocess.Popen(['amixer', '-c', '0', 'sset', 'Headphone', '--', '%ddB' % self.min_vol], stdout=subprocess.DEVNULL)
         if self.song is not None:
-            self.audio_proc = subprocess.Popen(['mpg123', self.song], stdout=subprocess.DEVNULL) 
+            self.audio_proc = subprocess.Popen(['mpg123', '-o', 'pulse', self.song], stdout=subprocess.DEVNULL) 
 
     def play_tts(self):
         # vol = 50%
@@ -35,7 +35,7 @@ class SoundHandler:
         subprocess.Popen(['amixer', '-c', '0', 'sset', 'Headphone', '--', '%ddB' %
                (self.min_vol + (self.max_vol-self.min_vol)*vol)
               ], stdout=subprocess.DEVNULL)
-        self.audio_proc = subprocess.Popen(['mpg123', '-q', '--loop', '-1', 'beep.mp3'], stdout=subprocess.DEVNULL)
+        self.audio_proc = subprocess.Popen(['mpg123', '-o', 'pulse', '-q', '--loop', '-1', '/home/pi/Music/beep.mp3'], stdout=subprocess.DEVNULL)
 
     def set_tts(self):
         time_tts = datetime.now().strftime("%I:%M %p")

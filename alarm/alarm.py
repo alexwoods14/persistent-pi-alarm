@@ -10,8 +10,7 @@ from sound_handler import SoundHandler
 
 class Alarm:
     def __init__(self):
-
-        self.counter = 0;
+        # self.counter = 0
         # set song to use
         # gTTS summary of day
         # initialize classifier and watchdog stuff
@@ -32,22 +31,34 @@ class Alarm:
         alarm_end = alarm_start + timedelta(minutes=30)
         
         # play alarm song until out of bed or go to beeping
+        print("lets get the moosic going!!")
         self.play_music()
+        time.sleep(2)
+        print("sleep? pff")
+        print(alarm_start)
+        print(alarm_end)
 
         # for 30 mins
         while datetime.now() < alarm_end:
             # if not in bed, stop audio, exit loop
             if not self.check_in_bed():
+                print("Lazy bastard has got up!")
                 self.audio.cleanup()
                 break
             else:
+                print("Prick is still in bed")
                 if not self.audio.playing_sound():
                     self.audio.play_beep()
+            time.sleep(1)
 
-        self.audio.set_tts()
-        time.sleep(1)
-        self.audio.play_tts()
-        while self.audio.playing_sound():
+        try:
+            self.audio.set_tts()
+            time.sleep(1)
+            self.audio.play_tts()
+            while self.audio.playing_sound():
+                time.sleep(1)
+        except Exception as e:
+            print(f"Doh! \n{e} \nWent wrong!!")
             time.sleep(1)
         
         while datetime.now() < alarm_end:
@@ -56,6 +67,7 @@ class Alarm:
             else:
                 if not self.audio.playing_sound():
                     self.audio.play_beep()
+            time.sleep(1)
             
         self.cleanup()
 
@@ -69,14 +81,13 @@ class Alarm:
         result = self.classifier.classify(image)
 
         # return 1 if (likely) in bed, 0 otherwise
-        #return result[0] >= 0.5
-        if self.counter < 20:
-            self.counter += 1
-            print("Returning 1")
-            return 1
-        else:
-            print("Returning 0")
-            return 0
+        return result[0] >= 0.3
+        
+        #if self.counter < 10:
+        #    self.counter += 1
+        #    return 1
+        #else:
+        #    return 0
 
 
     def play_music(self):
