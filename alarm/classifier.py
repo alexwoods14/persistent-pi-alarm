@@ -14,8 +14,8 @@ class Classifier:
         self.output_details = self.interpreter.get_output_details()
 
     def classify(self, image_url):
-        image = Image.open(image_url)
-        input_data = image.resize((200, 150))
+        input_data = Image.open(image_url)
+        # input_data = image.resize((128, 96))
         input_data = np.array(input_data).astype(np.float32)
         
         input_data = (np.expand_dims(input_data,0))
