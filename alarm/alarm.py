@@ -73,6 +73,7 @@ class Alarm:
 
     def cleanup(self):
         self.audio.cleanup()
+        self.camera.close()
 
     def check_in_bed(self):
         image = np.empty((96, 128, 3), dtype=np.uint8)
@@ -81,7 +82,7 @@ class Alarm:
         result = self.classifier.classify(image)
 
         # return 1 if (likely) in bed, 0 otherwise
-        return result[0] >= 0.3
+        return result[0] >= 0.5
         
         #if self.counter < 10:
         #    self.counter += 1

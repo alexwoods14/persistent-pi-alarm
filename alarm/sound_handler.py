@@ -31,7 +31,7 @@ class SoundHandler:
             self.audio_proc = subprocess.Popen(['mpg123', self.tts], stdout=subprocess.DEVNULL)
     
     def play_beep(self):
-        vol = 0.30
+        vol = 0.75
         subprocess.Popen(['amixer', '-c', '0', 'sset', 'Headphone', '--', '%ddB' %
                (self.min_vol + (self.max_vol-self.min_vol)*vol)
               ], stdout=subprocess.DEVNULL)
